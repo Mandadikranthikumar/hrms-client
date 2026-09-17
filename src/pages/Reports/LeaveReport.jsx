@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getAllLeaves } from "../services/leaveService";
+import { getAllLeaves } from "../../services/leaveService.js";
 
 const LeaveReport = () => {
   const [leaves, setLeaves] = useState([]);

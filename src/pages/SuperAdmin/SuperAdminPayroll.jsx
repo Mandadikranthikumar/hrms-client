@@ -25,6 +25,8 @@ import {
   FiCreditCard,
   FiLayers,
   FiAlertCircle,
+  FiGrid,
+  FiList,
 } from "react-icons/fi";
 import "./SuperAdminPayroll.css";
 
@@ -55,6 +57,9 @@ export default function SuperAdminPayroll() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrgFilter, setSelectedOrgFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [viewMode, setViewMode] = useState(() => {
+    return typeof window !== "undefined" && window.innerWidth <= 768 ? "card" : "table";
+  });
 
   // Modals state
   const [paySalaryModalData, setPaySalaryModalData] = useState(null);
@@ -675,8 +680,8 @@ export default function SuperAdminPayroll() {
           </div>
         </div>
 
-        {/* Search & Refresh */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* Search & Actions */}
+        <div className="sa-toolbar-actions">
           <div className="sa-search-box">
             <FiSearch className="search-icon" />
             <input
@@ -688,26 +693,193 @@ export default function SuperAdminPayroll() {
             />
           </div>
 
-          <button
-            onClick={fetchPayroll}
-            title="Refresh payroll data"
-            className="sa-select-input"
-            style={{ display: "flex", alignItems: "center", gap: "6px" }}
-          >
-            <FiRefreshCw className={loading ? "spin" : ""} /> Refresh
-          </button>
+          <div className="sa-toolbar-btn-group">
+            <button
+              onClick={fetchPayroll}
+              title="Refresh payroll data"
+              className="sa-select-input sa-refresh-btn"
+            >
+              <FiRefreshCw className={loading ? "spin" : ""} />
+              <span>Refresh</span>
+            </button>
+
+            {/* View Mode Toggle: Cards vs Table */}
+            <div className="sa-view-toggle-group">
+              <button
+                type="button"
+                className={`sa-view-toggle-btn ${viewMode === "card" ? "active" : ""}`}
+                onClick={() => setViewMode("card")}
+                title="Card View (Mobile optimized)"
+              >
+                <FiGrid size={14} />
+                <span>Cards</span>
+              </button>
+              <button
+                type="button"
+                className={`sa-view-toggle-btn ${viewMode === "table" ? "active" : ""}`}
+                onClick={() => setViewMode("table")}
+                title="Table View (Spreadsheet)"
+              >
+                <FiList size={14} />
+                <span>Table</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Main Table */}
-      <div className="sa-payroll-table-card">
-        <Table
-          columns={columns}
-          data={filteredEmployees}
-          loading={loading}
-          emptyText={`No employees or HR managers found for ${payrollData?.monthName || "the selected month"}.`}
-        />
-      </div>
+      {/* Main Table / Mobile Card List */}
+      {viewMode === "table" ? (
+        <div className="sa-payroll-table-card">
+          <div className="sa-table-scroll-hint">
+            <span>👉 Swipe horizontally to view all columns</span>
+          </div>
+          <Table
+            columns={columns}
+            data={filteredEmployees}
+            loading={loading}
+            emptyText={`No employees or HR managers found for ${payrollData?.monthName || "the selected month"}.`}
+          />
+        </div>
+      ) : (
+        <div className="sa-mobile-card-list">
+          {loading ? (
+            <div className="sa-mobile-loading-box">
+              <FiRefreshCw className="spin" size={24} />
+              <p>Loading payroll records...</p>
+            </div>
+          ) : filteredEmployees.length === 0 ? (
+            <div className="sa-mobile-empty-card">
+              <p>No employees or HR managers found for {payrollData?.monthName || "the selected month"}.</p>
+            </div>
+          ) : (
+            filteredEmployees.map((emp) => {
+              const isSending = emp.status === "Sending" || emp.isPayLocked;
+              return (
+                <div key={emp._id || emp.employeeId} className="sa-emp-payroll-card">
+                  {/* Card Top: Identity & Status */}
+                  <div className="sa-emp-card-header">
+                    <div className="sa-emp-card-identity">
+                      <span className="emp-id-badge">{emp.code || "EMP001"}</span>
+                      <div className="sa-emp-card-names">
+                        <h4 className="sa-emp-card-name">{emp.name}</h4>
+                        <div className="emp-meta-tags">
+                          <span
+                            className={`role-pill ${
+                              emp.role === "HR Manager" ? "hr" : "employee"
+                            }`}
+                          >
+                            {emp.role}
+                          </span>
+                          <span className="org-pill">
+                            {emp.organization?.name || "Infinetra Technologies"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className={`status-pill ${isSending ? "sent" : "pending"}`}>
+                      {isSending ? (
+                        <>
+                          <FiCheckCircle size={11} /> Sending
+                        </>
+                      ) : (
+                        <>
+                          <FiClock size={11} /> Pending
+                        </>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Bank Details Sub-bar */}
+                  <div className="sa-emp-card-bank">
+                    <FiCreditCard size={13} className="bank-icon" />
+                    <span className="bank-acc-num">{emp.accountNumber || "XXXX6787"}</span>
+                    {emp.bankName && <span className="bank-meta">{emp.bankName}</span>}
+                    {emp.ifscCode && <span className="bank-meta">{emp.ifscCode}</span>}
+                    {emp.upiId && <span className="bank-meta">UPI: {emp.upiId}</span>}
+                  </div>
+
+                  {/* Salary Metrics Grid */}
+                  <div className="sa-emp-card-salary-grid">
+                    <div className="sa-salary-metric">
+                      <span className="sa-metric-label">Monthly</span>
+                      <div className="sa-metric-value-row">
+                        <span className="sa-metric-val">
+                          ₹{Number(emp.monthSalary).toLocaleString("en-IN")}/-
+                        </span>
+                        <button
+                          type="button"
+                          className="sa-metric-edit-btn"
+                          onClick={() => handleOpenConfigModal(emp)}
+                          title="Edit salary & banking settings"
+                        >
+                          <FiEdit2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="sa-salary-metric">
+                      <span className="sa-metric-label">Yearly CTC</span>
+                      <span className="sa-metric-val muted">
+                        ₹{Number(emp.yearlySalary).toLocaleString("en-IN")}/-
+                      </span>
+                    </div>
+
+                    <div className="sa-salary-metric">
+                      <span className="sa-metric-label">Remaining</span>
+                      <span className="sa-metric-val accent">
+                        ₹{Number(emp.remainingSalary).toLocaleString("en-IN")}/-
+                      </span>
+                      <span className="sa-metric-sub">
+                        {emp.paidCountThisYear > 0
+                          ? `${emp.paidCountThisYear}/12 paid`
+                          : "0/12 paid"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons Row */}
+                  <div className="sa-emp-card-actions">
+                    {emp.isPayLocked ? (
+                      <button
+                        className="btn-row-paid sa-card-action-btn"
+                        disabled
+                        title={`Salary locked for 30 days. Remaining: ${emp.payLockRemainingDays || 30} days.`}
+                      >
+                        <FiLock size={12} /> {emp.payLockText || "Paid (30d lock)"}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn-row-pay sa-card-action-btn"
+                        onClick={() => handleOpenPaySalaryModal(emp)}
+                      >
+                        <FiDollarSign size={14} /> Pay Month Salary
+                      </button>
+                    )}
+
+                    {!emp.isBonusEligible ? (
+                      <button
+                        className="btn-bonus-locked sa-card-action-btn"
+                        disabled
+                        title={`Bonus locked: ${emp.bonusCooldownText}`}
+                      >
+                        <FiLock size={12} /> {emp.bonusCooldownText}
+                      </button>
+                    ) : (
+                      <button
+                        className="btn-bonus-pay sa-card-action-btn"
+                        onClick={() => handleOpenBonusModal(emp)}
+                      >
+                        <FiGift size={14} /> Pay Bonus
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* =========================================================================
           MODAL 1: Pay Single Month Salary
